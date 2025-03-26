@@ -7,11 +7,9 @@ import os
 # -----------------------
 # Secure API Key Handling
 # -----------------------
-# First, try to retrieve the API key from Streamlit secrets.
 if "openai" in st.secrets and "api_key" in st.secrets["openai"]:
     openai.api_key = st.secrets["openai"]["api_key"]
 else:
-    # Fallback to environment variable
     openai_api_key = os.getenv("OPENAI_API_KEY")
     if not openai_api_key:
         st.error("OpenAI API key not found. Please set it in .streamlit/secrets.toml or as an environment variable.")
@@ -25,7 +23,7 @@ else:
 def load_excel_data(filename):
     try:
         excel_file = pd.ExcelFile(filename)
-        # Assume the header row is the first row (index 0)
+        # If your header row is not the first row, adjust header parameter accordingly
         sheet1 = excel_file.parse(excel_file.sheet_names[0])
         sheet2 = excel_file.parse(excel_file.sheet_names[1])
         sheet3 = excel_file.parse(excel_file.sheet_names[2])
@@ -38,18 +36,21 @@ sheet1, sheet2, sheet3 = load_excel_data("Pharma_Strategy_Template_V1.xlsx")
 if sheet1 is None or sheet2 is None or sheet3 is None:
     st.stop()
 
-# Uncomment the next line to inspect the columns if needed
-# st.write("Sheet1 Columns:", sheet1.columns.tolist())
+# Debug: Print out the columns in Sheet1 to verify layout
+st.write("Sheet1 Columns:", sheet1.columns.tolist())
 
 # -----------------------
 # Extract Options from Sheet1
 # -----------------------
-# Role options: from columns B–D (indexes 1 to 3)
-role_options = list(sheet1.columns[1:4])
-# Lifecycle options: from columns E–I (indexes 4 to 8)
-lifecycle_options = list(sheet1.columns[4:9])
-# Customer Journey options: from columns J–M (indexes 9 to 12)
-journey_options = list(sheet1.columns[9:13])
+# Adjust these slices if your Excel file has a different structure
+role_options = list(sheet1.columns[1:4])         # Expected columns B-D
+lifecycle_options = list(sheet1.columns[4:9])      # Expected columns E-I
+journey_options = list(sheet1.columns[9:13])       # Expected columns J-M
+
+# Check if we have extracted any options
+if not role_options or not lifecycle_options or not journey_options:
+    st.error("No options were found in the expected columns. Please check your Excel file layout.")
+    st.stop()
 
 # -----------------------
 # Helper Functions
@@ -59,7 +60,6 @@ def filter_strategic_imperatives(df, role, lifecycle, journey):
     Filters the strategic imperatives (in column "Strategic Imperative")
     where the corresponding cells in the given role, lifecycle, and journey columns contain an "x".
     """
-    # Check that the columns exist in the dataframe
     if role not in df.columns or lifecycle not in df.columns or journey not in df.columns:
         st.error("The Excel file’s columns do not match the expected names for filtering.")
         return []
@@ -144,24 +144,20 @@ if st.button("Generate Strategy"):
         st.error("Please select at least one strategic imperative.")
     else:
         st.header("Strategic Recommendations")
-        # Ensure Sheet3 has the necessary columns
         if "Strategic Imperative" not in sheet3.columns or "Result" not in sheet3.columns:
             st.error("Sheet3 must have columns named 'Strategic Imperative' and 'Result'.")
             st.stop()
         
-        # Filter results based on selected strategic imperatives from Sheet3
         results_df = sheet3[sheet3["Strategic Imperative"].isin(selected_strategics)]
         if results_df.empty:
             st.info("No results found for the selected strategic imperatives.")
         else:
             for idx, row in results_df.iterrows():
                 base_result = row["Result"]
-                # Append product differentiators if selected
                 differentiators_text = ", ".join(selected_differentiators) if selected_differentiators else ""
                 customized_result = base_result
                 if differentiators_text:
                     customized_result += f" (Customized with: {differentiators_text})"
-                # Get AI-generated details
                 ai_output = generate_ai_output(customized_result, selected_differentiators)
                 st.subheader(customized_result)
                 st.write(ai_output.get("description", "No description available."))
